@@ -184,6 +184,7 @@ namespace esphome
             uint8_t target_temp = 0;
             NonNasaFanspeed fanspeed = NonNasaFanspeed::Auto;
             NonNasaMode mode = NonNasaMode::Heat;
+            NonNasaWindDirection wind_direction = NonNasaWindDirection::Stop;
             bool power = false;
 
             std::vector<uint8_t> encode();

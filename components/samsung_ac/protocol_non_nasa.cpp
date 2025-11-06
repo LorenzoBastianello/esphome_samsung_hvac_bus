@@ -353,7 +353,7 @@ namespace esphome
             if (room_temp > 0)
                 data[5] = room_temp;
             data[6] = (target_temp & 31U) | encode_request_fanspeed(fanspeed);
-            data[7] = (uint8_t)encode_request_mode(mode);
+            data[7] = (uint8_t)encode_request_mode(mode) | (((uint8_t)wind_direction) << 3);
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
             data[9] = (uint8_t)0x21;
@@ -375,6 +375,7 @@ namespace esphome
             request.target_temp = last_command20_.target_temp;
             request.fanspeed = last_command20_.fanspeed;
             request.mode = last_command20_.mode;
+            request.wind_direction = last_command20_.wind_direction;
 
             return request;
         }
@@ -442,7 +443,7 @@ namespace esphome
 
             if (request.swing_mode)
             {
-                ESP_LOGW(TAG, "change swingmode is currently not implemented");
+                req.wind_direction = swingmode_to_nonnasa_wind_direction(request.swing_mode.value());
             }
 
             // Add to the queue with the current time
@@ -508,6 +509,32 @@ namespace esphome
             case NonNasaFanspeed::Auto:
                 return FanMode::Auto;
             }
+        }
+
+        NonNasaWindDirection swingmode_to_nonnasa_wind_direction(SwingMode swingMode)
+        {
+            switch (swingMode)
+            {
+            case SwingMode::Vertical:
+                return NonNasaWindDirection::Vertical;
+            case SwingMode::Horizontal:
+                return NonNasaWindDirection::Horizontal;
+            case SwingMode::All:
+                return NonNasaWindDirection::FourWay;
+            case SwingMode::Fix:
+            default:
+                return NonNasaWindDirection::Stop;
+            }
+        }
+
+        bool nonnasa_wind_direction_is_vertical_swing(NonNasaWindDirection wind_direction)
+        {
+            return wind_direction == NonNasaWindDirection::Vertical || wind_direction == NonNasaWindDirection::FourWay;
+        }
+
+        bool nonnasa_wind_direction_is_horizontal_swing(NonNasaWindDirection wind_direction)
+        {
+            return wind_direction == NonNasaWindDirection::Horizontal || wind_direction == NonNasaWindDirection::FourWay;
         }
 
         DecodeResult try_decode_non_nasa_packet(std::vector<uint8_t> data)
@@ -586,6 +613,7 @@ namespace esphome
                                                     item.request.target_temp == nonpacket_.command20.target_temp &&
                                                     item.request.fanspeed == nonpacket_.command20.fanspeed &&
                                                     item.request.mode == nonpacket_.command20.mode &&
+                                                    item.request.wind_direction == nonpacket_.command20.wind_direction &&
                                                     item.request.power == nonpacket_.command20.power; });
 
                 // If a state update comes through after a control message has been sent, but before it
@@ -603,9 +631,9 @@ namespace esphome
                     target->set_mode(nonpacket_.src, nonnasa_mode_to_mode(nonpacket_.command20.mode));
                     target->set_water_heater_mode(nonpacket_.src, nonnasa_water_heater_mode_to_mode(-0)); // TODO
                     target->set_fanmode(nonpacket_.src, nonnasa_fanspeed_to_fanmode(nonpacket_.command20.fanspeed));
-                    target->set_altmode(nonpacket_.src, 0);              // TODO
-                    target->set_swing_horizontal(nonpacket_.src, false); // TODO
-                    target->set_swing_vertical(nonpacket_.src, false);   // TODO
+                    target->set_altmode(nonpacket_.src, 0); // TODO
+                    target->set_swing_horizontal(nonpacket_.src, nonnasa_wind_direction_is_horizontal_swing(nonpacket_.command20.wind_direction));
+                    target->set_swing_vertical(nonpacket_.src, nonnasa_wind_direction_is_vertical_swing(nonpacket_.command20.wind_direction));
                 }
                 break;
             }
