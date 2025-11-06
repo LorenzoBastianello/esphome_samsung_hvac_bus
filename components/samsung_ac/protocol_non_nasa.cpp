@@ -315,20 +315,16 @@ namespace esphome
 
         uint8_t encode_request_fanspeed(NonNasaFanspeed value)
         {
-            switch (value)
-            {
-            case NonNasaFanspeed::Auto:
-                return 0;
-            case NonNasaFanspeed::Low:
-                return 64;
-            case NonNasaFanspeed::Medium:
-                return 128;
-            case NonNasaFanspeed::Fresh:
-            case NonNasaFanspeed::High:
-                return 160;
-            default:
-                return 0; // Auto
-            }
+            // The fanspeed value needs to be shifted into bits 7-5 of the control byte.
+            // The AC will echo this back in bits 2-0 of data[7], so we need to ensure
+            // the values match to prevent oscillation.
+            // Simply shifting the enum value by 5 positions gives us the correct encoding:
+            // Auto=0  -> 0<<5 = 0   (0b000 00000)
+            // Low=2   -> 2<<5 = 64  (0b010 00000)
+            // Medium=4-> 4<<5 = 128 (0b100 00000)
+            // High=5  -> 5<<5 = 160 (0b101 00000)
+            // Fresh=6 -> 6<<5 = 192 (0b110 00000)
+            return ((uint8_t)value) << 5;
         }
 
         std::vector<uint8_t> NonNasaRequest::encode()
