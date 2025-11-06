@@ -15,6 +15,10 @@ namespace esphome
 {
     namespace samsung_ac
     {
+        // Forward declarations
+        NonNasaWindDirection swingmode_to_nonnasa_wind_direction(SwingMode swingMode);
+        bool nonnasa_wind_direction_is_vertical_swing(NonNasaWindDirection wind_direction);
+        bool nonnasa_wind_direction_is_horizontal_swing(NonNasaWindDirection wind_direction);
 
         std::list<NonNasaRequestQueueItem> nonnasa_requests;
         bool controller_registered = false;
