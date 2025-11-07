@@ -58,7 +58,8 @@ namespace esphome
             str += "power:" + std::to_string(power ? 1 : 0) + "; ";
             str += "wind_direction:" + std::to_string((uint8_t)wind_direction) + "; ";
             str += "fanspeed:" + std::to_string((uint8_t)fanspeed) + "; ";
-            str += "mode:" + long_to_hex((uint8_t)mode);
+            str += "mode:" + long_to_hex((uint8_t)mode) + "; ";
+            str += "alt_mode:" + std::to_string((uint8_t)alt_mode);
             return str;
         }
 
@@ -212,6 +213,20 @@ namespace esphome
                 command20.power = data[8] & 0b10000000;
                 command20.pipe_out = data[11] - 55;
 
+                // Decode altmode from response data
+                // Note: In Cmd20 responses, we receive the state, not the command format
+                // We need to check if we can infer altmode from the response
+                // For now, set to None as Cmd20 doesn't directly report altmode state
+                // This may need to be refined based on actual protocol behavior
+                command20.alt_mode = NonNasaAltMode::None;
+                
+                // Log raw data bytes for altmode debugging
+                if (debug_log_messages)
+                {
+                    ESP_LOGD(TAG, "Cmd20 raw data[4]=0x%02X (swing+sleep), data[7]=0x%02X (quiet)", 
+                             data[4], data[7]);
+                }
+
                 if (command20.wind_direction == (NonNasaWindDirection)0)
                     command20.wind_direction = NonNasaWindDirection::Stop;
 
@@ -334,13 +349,13 @@ namespace esphome
                 0xD0,                     // 01 src
                 (uint8_t)hex_to_int(dst), // 02 dst
                 0xB0,                     // 03 cmd
-                0x1F,                     // 04 ?
-                0x04,                     // 05 ?
-                0,                        // 06 temp + fanmode
-                0,                        // 07 operation mode
-                0,                        // 08 power + individual mode
+                0x1F,                     // 04 swing + sleep mode (data byte 1)
+                0x04,                     // 05 room temp
+                0,                        // 06 temp + fanmode (data byte 3)
+                0,                        // 07 operation mode (data byte 4)
+                0,                        // 08 power + individual mode (data byte 5)
                 0,                        // 09
-                0,                        // 10
+                0,                        // 10 blade position + quiet mode (data byte 7)
                 0,                        // 11
                 0,                        // 12 crc
                 0x34                      // 13 end
@@ -350,8 +365,10 @@ namespace esphome
             // seems to be like a building management system.
             bool individual = false;
 
-            // Encode wind_direction in data[4] (command byte 1)
-            // According to protocol docs: 0x1a = blade swing up/down, 0x1f = blade swing off
+            // Encode wind_direction and sleep mode in data[4] (command byte 1)
+            // According to protocol docs: 
+            // - bits 4-0: 0x1a = blade swing up/down, 0x1f = blade swing off
+            // - bit 5: sleep mode
             if (wind_direction == NonNasaWindDirection::Vertical || 
                 wind_direction == NonNasaWindDirection::FourWay)
             {
@@ -360,6 +377,13 @@ namespace esphome
             else
             {
                 data[4] = 0x1F; // Swing off
+            }
+            
+            // Set sleep mode bit if sleep altmode is active
+            if (alt_mode == NonNasaAltMode::Sleep)
+            {
+                data[4] |= 0b00100000; // Set bit 5 for sleep mode
+                ESP_LOGD(TAG, "Encoding Sleep mode in data[4]: 0x%02X", data[4]);
             }
 
             if (room_temp > 0)
@@ -371,9 +395,18 @@ namespace esphome
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
             data[9] = (uint8_t)0x21;
+            
+            // Encode quiet mode in data[10] (command byte 7)
+            // bit 5: quiet mode
+            // bits 4-0: blade position (set to 0 for now, not controlling position directly)
+            data[10] = 0x00;
+            if (alt_mode == NonNasaAltMode::Quiet)
+            {
+                data[10] |= 0b00100000; // Set bit 5 for quiet mode
+                ESP_LOGD(TAG, "Encoding Quiet mode in data[10]: 0x%02X", data[10]);
+            }
+            
             data[12] = build_checksum(data);
-
-            data[9] = (uint8_t)0x21;
 
             return data;
         }
@@ -390,6 +423,7 @@ namespace esphome
             request.fanspeed = last_command20_.fanspeed;
             request.mode = last_command20_.mode;
             request.wind_direction = last_command20_.wind_direction;
+            request.alt_mode = last_command20_.alt_mode;
 
             return request;
         }
@@ -457,6 +491,41 @@ namespace esphome
             return wind_direction == NonNasaWindDirection::Horizontal || wind_direction == NonNasaWindDirection::FourWay;
         }
 
+        NonNasaAltMode altmode_to_nonnasa_altmode(AltMode value)
+        {
+            // Map generic AltMode values to NonNasaAltMode
+            // The mapping depends on how altmodes are configured in the YAML
+            // Standard presets: None=0, Eco, Away, Boost, Comfort, Home, Sleep, Activity
+            // For Non-NASA, we support: None=0, Sleep=1, Quiet=2
+            switch (value)
+            {
+            case 0:
+                return NonNasaAltMode::None;
+            case 1:
+                return NonNasaAltMode::Sleep;
+            case 2:
+                return NonNasaAltMode::Quiet;
+            default:
+                ESP_LOGW(TAG, "Unknown AltMode value %d, defaulting to None", value);
+                return NonNasaAltMode::None;
+            }
+        }
+
+        AltMode nonnasa_altmode_to_altmode(NonNasaAltMode value)
+        {
+            switch (value)
+            {
+            case NonNasaAltMode::None:
+                return 0;
+            case NonNasaAltMode::Sleep:
+                return 1;
+            case NonNasaAltMode::Quiet:
+                return 2;
+            default:
+                return 0;
+            }
+        }
+
         void NonNasaProtocol::publish_request(MessageTarget *target, const std::string &address, ProtocolRequest &request)
         {
             auto req = NonNasaRequest::create(address);
@@ -478,7 +547,9 @@ namespace esphome
 
             if (request.alt_mode)
             {
-                ESP_LOGW(TAG, "change altmode is currently not implemented");
+                req.alt_mode = altmode_to_nonnasa_altmode(request.alt_mode.value());
+                ESP_LOGD(TAG, "Setting altmode to %d (NonNasaAltMode: %d)", 
+                         request.alt_mode.value(), (uint8_t)req.alt_mode);
             }
 
             if (request.swing_mode)
@@ -628,6 +699,7 @@ namespace esphome
                                                     item.request.fanspeed == nonpacket_.command20.fanspeed &&
                                                     item.request.mode == nonpacket_.command20.mode &&
                                                     item.request.wind_direction == nonpacket_.command20.wind_direction &&
+                                                    item.request.alt_mode == nonpacket_.command20.alt_mode &&
                                                     item.request.power == nonpacket_.command20.power; });
 
                 // If a state update comes through after a control message has been sent, but before it
@@ -645,7 +717,7 @@ namespace esphome
                     target->set_mode(nonpacket_.src, nonnasa_mode_to_mode(nonpacket_.command20.mode));
                     target->set_water_heater_mode(nonpacket_.src, nonnasa_water_heater_mode_to_mode(-0)); // TODO
                     target->set_fanmode(nonpacket_.src, nonnasa_fanspeed_to_fanmode(nonpacket_.command20.fanspeed));
-                    target->set_altmode(nonpacket_.src, 0); // TODO
+                    target->set_altmode(nonpacket_.src, nonnasa_altmode_to_altmode(nonpacket_.command20.alt_mode));
                     target->set_swing_horizontal(nonpacket_.src, nonnasa_wind_direction_is_horizontal_swing(nonpacket_.command20.wind_direction));
                     target->set_swing_vertical(nonpacket_.src, nonnasa_wind_direction_is_vertical_swing(nonpacket_.command20.wind_direction));
                 }

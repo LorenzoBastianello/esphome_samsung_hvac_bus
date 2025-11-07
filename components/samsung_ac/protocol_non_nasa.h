@@ -39,6 +39,16 @@ namespace esphome
             Stop = 31
         };
 
+        // AltMode values for Non-NASA protocol
+        // Based on Samsung-HVAC-buscontrol documentation
+        enum class NonNasaAltMode : uint8_t
+        {
+            None = 0,    // No special mode active
+            Sleep = 1,   // Sleep mode - bit 5 of data byte 1 in command A0
+            Quiet = 2,   // Quiet mode - bit 5 of data byte 7 in command A0
+            Unknown = 0xFF
+        };
+
         struct NonNasaCommand20 // from indoor units
         {
             uint8_t target_temp = 0;
@@ -49,6 +59,7 @@ namespace esphome
             NonNasaFanspeed fanspeed = NonNasaFanspeed::Auto;
             NonNasaMode mode = NonNasaMode::Heat;
             NonNasaWindDirection wind_direction = NonNasaWindDirection::Stop;
+            NonNasaAltMode alt_mode = NonNasaAltMode::None;
 
             bool power = false;
 
@@ -185,6 +196,7 @@ namespace esphome
             NonNasaFanspeed fanspeed = NonNasaFanspeed::Auto;
             NonNasaMode mode = NonNasaMode::Heat;
             NonNasaWindDirection wind_direction = NonNasaWindDirection::Stop;
+            NonNasaAltMode alt_mode = NonNasaAltMode::None;
             bool power = false;
 
             std::vector<uint8_t> encode();
