@@ -15,10 +15,6 @@ namespace esphome
 {
     namespace samsung_ac
     {
-        // Forward declarations
-        NonNasaWindDirection swingmode_to_nonnasa_wind_direction(SwingMode swingMode);
-        bool nonnasa_wind_direction_is_vertical_swing(NonNasaWindDirection wind_direction);
-        bool nonnasa_wind_direction_is_horizontal_swing(NonNasaWindDirection wind_direction);
 
         std::list<NonNasaRequestQueueItem> nonnasa_requests;
         bool controller_registered = false;
@@ -421,6 +417,32 @@ namespace esphome
             }
         }
 
+        NonNasaWindDirection swingmode_to_nonnasa_wind_direction(SwingMode swingMode)
+        {
+            switch (swingMode)
+            {
+            case SwingMode::Vertical:
+                return NonNasaWindDirection::Vertical;
+            case SwingMode::Horizontal:
+                return NonNasaWindDirection::Horizontal;
+            case SwingMode::All:
+                return NonNasaWindDirection::FourWay;
+            case SwingMode::Fix:
+            default:
+                return NonNasaWindDirection::Stop;
+            }
+        }
+
+        bool nonnasa_wind_direction_is_vertical_swing(NonNasaWindDirection wind_direction)
+        {
+            return wind_direction == NonNasaWindDirection::Vertical || wind_direction == NonNasaWindDirection::FourWay;
+        }
+
+        bool nonnasa_wind_direction_is_horizontal_swing(NonNasaWindDirection wind_direction)
+        {
+            return wind_direction == NonNasaWindDirection::Horizontal || wind_direction == NonNasaWindDirection::FourWay;
+        }
+
         void NonNasaProtocol::publish_request(MessageTarget *target, const std::string &address, ProtocolRequest &request)
         {
             auto req = NonNasaRequest::create(address);
@@ -513,32 +535,6 @@ namespace esphome
             case NonNasaFanspeed::Auto:
                 return FanMode::Auto;
             }
-        }
-
-        NonNasaWindDirection swingmode_to_nonnasa_wind_direction(SwingMode swingMode)
-        {
-            switch (swingMode)
-            {
-            case SwingMode::Vertical:
-                return NonNasaWindDirection::Vertical;
-            case SwingMode::Horizontal:
-                return NonNasaWindDirection::Horizontal;
-            case SwingMode::All:
-                return NonNasaWindDirection::FourWay;
-            case SwingMode::Fix:
-            default:
-                return NonNasaWindDirection::Stop;
-            }
-        }
-
-        bool nonnasa_wind_direction_is_vertical_swing(NonNasaWindDirection wind_direction)
-        {
-            return wind_direction == NonNasaWindDirection::Vertical || wind_direction == NonNasaWindDirection::FourWay;
-        }
-
-        bool nonnasa_wind_direction_is_horizontal_swing(NonNasaWindDirection wind_direction)
-        {
-            return wind_direction == NonNasaWindDirection::Horizontal || wind_direction == NonNasaWindDirection::FourWay;
         }
 
         DecodeResult try_decode_non_nasa_packet(std::vector<uint8_t> data)
