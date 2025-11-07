@@ -350,6 +350,18 @@ namespace esphome
             // seems to be like a building management system.
             bool individual = false;
 
+            // Encode wind_direction in data[4] (command byte 1)
+            // According to protocol docs: 0x1a = blade swing up/down, 0x1f = blade swing off
+            if (wind_direction == NonNasaWindDirection::Vertical || 
+                wind_direction == NonNasaWindDirection::FourWay)
+            {
+                data[4] = 0x1A; // Swing up/down
+            }
+            else
+            {
+                data[4] = 0x1F; // Swing off
+            }
+
             if (room_temp > 0)
                 data[5] = room_temp;
             data[6] = (target_temp & 31U) | encode_request_fanspeed(fanspeed);
@@ -359,11 +371,6 @@ namespace esphome
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
             data[8] |= (individual ? 6U : 4U);
             data[9] = (uint8_t)0x21;
-            
-            // Encode wind_direction in data[10]
-            // In control packets, wind_direction seems to go in data[10]
-            data[10] = (uint8_t)wind_direction;
-            
             data[12] = build_checksum(data);
 
             data[9] = (uint8_t)0x21;
