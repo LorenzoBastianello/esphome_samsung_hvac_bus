@@ -353,9 +353,17 @@ namespace esphome
             if (room_temp > 0)
                 data[5] = room_temp;
             data[6] = (target_temp & 31U) | encode_request_fanspeed(fanspeed);
-            data[7] = (uint8_t)encode_request_mode(mode) | (((uint8_t)wind_direction) << 3);
+            
+            // data[7] in control packets (0xB0) format appears to use simplified swing encoding:
+            // bits 7-4: encode the swing mode
+            // bits 3-0: fanspeed (echoed from bits 2-0 that AC will report)
+            // The wind direction values in status packets are 26(vert), 27(horiz), 28(4way), 31(stop)
+            // But in control packets we shift the lower 4 bits to upper 4 bits
+            uint8_t swing_nibble = ((uint8_t)wind_direction & 0x0F) << 4;
+            data[7] = swing_nibble | ((uint8_t)fanspeed & 0x0F);
+            
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
-            data[8] |= (individual ? 6U : 4U);
+            data[8] |= (individual ? 6U : 4U) | encode_request_mode(mode);
             data[9] = (uint8_t)0x21;
             data[12] = build_checksum(data);
 
