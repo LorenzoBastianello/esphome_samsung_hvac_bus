@@ -362,8 +362,14 @@ namespace esphome
             uint8_t swing_nibble = ((uint8_t)wind_direction & 0x0F) << 4;
             data[7] = swing_nibble | ((uint8_t)fanspeed & 0x0F);
             
+            ESP_LOGW(TAG, "Encoding swing: wind_direction=%d, swing_nibble=0x%02X, data[7]=0x%02X", 
+                     (uint8_t)wind_direction, swing_nibble, data[7]);
+            
+            // data[8]: power (bit 7) + individual flag (bits 2-1) + mode (bits 5-0)
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
-            data[8] |= (individual ? 6U : 4U) | encode_request_mode(mode);
+            data[8] &= 0xC0; // Keep only the power bits
+            data[8] |= (individual ? 6U : 4U);
+            data[8] |= encode_request_mode(mode);
             data[9] = (uint8_t)0x21;
             data[12] = build_checksum(data);
 
