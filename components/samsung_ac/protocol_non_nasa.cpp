@@ -355,9 +355,8 @@ namespace esphome
             data[6] = (target_temp & 31U) | encode_request_fanspeed(fanspeed);
             data[7] = (uint8_t)encode_request_mode(mode);
             
-            // data[8]: power (bit 7) + individual flag (bits 2-1) + mode (bits 5-0)
+            // data[8]: power (bit 7) + individual flag (bits 2-1)
             data[8] = !power ? (uint8_t)0xC0 : (uint8_t)0xF0;
-            data[8] &= 0xC0; // Keep only the power bits
             data[8] |= (individual ? 6U : 4U);
             data[9] = (uint8_t)0x21;
             data[12] = build_checksum(data);
