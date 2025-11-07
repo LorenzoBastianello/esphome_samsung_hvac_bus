@@ -483,11 +483,7 @@ namespace esphome
 
             if (request.swing_mode)
             {
-                ESP_LOGW(TAG, "change swingmode via software is not supported in non-NASA protocol");
-                // The non-NASA protocol does not appear to support sending swing control commands.
-                // The AC reports its current swing state (via wind_direction in status packets),
-                // but control packets (0xB0) don't have a field for changing it programmatically.
-                // Swing must be controlled manually via the IR remote or physical controls.
+                req.wind_direction = swingmode_to_nonnasa_wind_direction(request.swing_mode.value());
             }
 
             // Add to the queue with the current time
